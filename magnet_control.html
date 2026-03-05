@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Magnet Control</title>
+<style>
+/* ── High Contrast Dark ────────────────────────────────────────── */
+:root {
+  --bg:       #0b0c0e;
+  --panel:    #141517;
+  --panel2:   #1c1d20;
+  --border:   #5a5d66;
+  --accent:   #4fc3f7;
+  --green:    #56d364;
+  --red:      #ff6b6b;
+  --yellow:   #f0c040;
+  --text:     #e8eaf0;
+  --dim:      #9da0ab;
+  --bright:   #ffffff;
+  --mono:     'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 22px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+#hdr {
+  background: var(--panel2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-shrink: 0;
+  height: 58px;
+}
+#hdr-title {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--bright);
+  letter-spacing: 0.5px;
+}
+#status-wrap { display: flex; align-items: center; gap: 8px; }
+#status-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--red);
+  transition: background 0.25s;
+  flex-shrink: 0;
+}
+#status-dot.connected { background: var(--yellow); }
+#status-dot.running   { background: var(--green); box-shadow: 0 0 8px var(--green); }
+#status-dot.error     { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+#status-txt { font-size: 18px; color: var(--dim); }
+.hz-lbl { font-size: 18px; }
+.hz-lbl span:first-child { color: var(--dim); }
+.hz-lbl span:last-child  { color: var(--accent); font-weight: bold; }
+#spacer { flex: 1; }
+#pkt-ctr { font-size: 18px; color: var(--dim); }
+
+/* ── Main split ──────────────────────────────────────────────── */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Left panel ─────────────────────────────────────────────── */
+#panel {
+  width: 420px;
+  min-width: 420px;
+  max-width: 420px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sec {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+.sec-hd {
+  font-size: 16px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 10px;
+}
+
+/* Buttons */
+.btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 20px;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover  { border-color: var(--accent); color: var(--bright); }
+.btn.active { background: #1e3a5f; border-color: var(--accent); color: var(--accent); }
+.btn-row         { display: flex; gap: 6px; }
+.btn-row .btn    { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; }
+
+/* Run button */
+#btn-run {
+  width: 100%; padding: 12px; font-size: 22px; font-weight: bold;
+  background: #1b3a1b; border: 1px solid #2e6b2e; color: #6dbf6d;
+  border-radius: 3px; cursor: pointer; font-family: var(--mono);
+  transition: all 0.12s;
+}
+#btn-run:hover   { background: #215021; }
+#btn-run.running { background: #3a1a1a; border-color: #6a2d2d; color: var(--red); }
+
+/* Connect section */
+.conn-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.conn-row input {
+  flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--mono); font-size: 20px;
+  padding: 6px 10px; border-radius: 3px;
+}
+.conn-row input:focus { outline: none; border-color: var(--accent); }
+.conn-row .btn { flex: 0 0 auto; }
+.note { font-size: 18px; color: var(--dim); }
+
+/* Param rows */
+.p-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.p-row:last-child { margin-bottom: 0; }
+.p-lbl { width: 100px; font-size: 18px; color: var(--dim); flex-shrink: 0; }
+.p-val { width: 64px; font-size: 20px; color: var(--accent); text-align: right; flex-shrink: 0; font-weight: bold; }
+input[type=range] {
+  flex: 1; height: 5px; -webkit-appearance: none;
+  background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+  border: 2px solid var(--panel2);
+}
+
+/* Readout grid */
+.ro-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 5px 10px; font-size: 20px;
+}
+.ro-k { color: var(--dim); }
+.ro-v { color: var(--bright); font-weight: bold; }
+
+/* ── Graph area ─────────────────────────────────────────────── */
+#graph-area {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 10px; gap: 6px; overflow: hidden;
+  min-width: 0;
+}
+#graph-top {
+  display: flex; align-items: center; gap: 22px;
+  font-size: 18px; color: var(--dim); flex-shrink: 0;
+}
+.leg { display: flex; align-items: center; gap: 7px; }
+.leg-ln { width: 24px; height: 3px; border-radius: 1px; }
+#canvas-wrap { flex: 1; position: relative; }
+#cv {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="hdr">
+  <span id="hdr-title">MAGNET CONTROL</span>
+  <div id="status-wrap">
+    <div id="status-dot"></div>
+    <span id="status-txt">DISCONNECTED</span>
+  </div>
+  <div class="hz-lbl"><span>RX </span><span id="hz-rx">-- Hz</span></div>
+  <div class="hz-lbl"><span>TX </span><span id="hz-tx">-- Hz</span></div>
+  <div id="spacer"></div>
+  <span id="pkt-ctr">pkts: 0</span>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Left panel -->
+  <div id="panel">
+
+    <!-- Connection -->
+    <div class="sec">
+      <div class="sec-hd">Serial Connection</div>
+      <div class="conn-row">
+        <input id="inp-baud" type="number" value="2000000" placeholder="baud">
+        <button class="btn" id="btn-conn" onclick="toggleConnect()">Connect</button>
+      </div>
+      <div class="note">Chrome / Edge &nbsp;|&nbsp; Web Serial API &nbsp;|&nbsp; Ubuntu USB</div>
+    </div>
+
+    <!-- Run -->
+    <div class="sec">
+      <div class="sec-hd">Output</div>
+      <button id="btn-run" onclick="toggleRun()">&#9654; START</button>
+    </div>
+
+    <!-- Waveform -->
+    <div class="sec">
+      <div class="sec-hd">Waveform</div>
+      <div class="btn-row">
+        <button class="btn active" id="btn-sine"   onclick="setWave('sine')">Sine</button>
+        <button class="btn"        id="btn-square" onclick="setWave('square')">Square</button>
+        <button class="btn"        id="btn-ramp"   onclick="setWave('ramp')">Ramp</button>
+      </div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="sec">
+      <div class="sec-hd">Parameters</div>
+
+      <div class="p-row">
+        <span class="p-lbl">Period (s)</span>
+        <input type="range" id="sl-period" min="0.02" max="10" step="0.01" value="2.0"
+               oninput="onParam('period', this.value)">
+        <span class="p-val" id="v-period">2.00</span>
+      </div>
+
+      <div class="p-row">
+        <span class="p-lbl">Magnitude</span>
+        <input type="range" id="sl-mag" min="0" max="100" step="1" value="50"
+               oninput="onParam('mag', this.value)">
+        <span class="p-val" id="v-mag">50</span>
+      </div>
+
+      <div class="p-row">
+        <span class="p-lbl">Offset</span>
+        <input type="range" id="sl-offset" min="-100" max="100" step="1" value="0"
+               oninput="onParam('offset', this.value)">
+        <span class="p-val" id="v-offset">0</span>
+      </div>
+    </div>
+
+    <!-- Live readout -->
+    <div class="sec">
+      <div class="sec-hd">Readout</div>
+      <div class="ro-grid">
+        <span class="ro-k">signal</span>   <span class="ro-v" id="ro-sig">0.0</span>
+        <span class="ro-k">range</span>    <span class="ro-v" id="ro-range">±50</span>
+        <span class="ro-k">duty_L</span>   <span class="ro-v" id="ro-dl">0</span>
+        <span class="ro-k">duty_H</span>   <span class="ro-v" id="ro-dh">0</span>
+        <span class="ro-k">wave</span>     <span class="ro-v" id="ro-wave">sine</span>
+        <span class="ro-k">period</span>   <span class="ro-v" id="ro-period">2.00 s</span>
+      </div>
+    </div>
+
+  </div><!-- /panel -->
+
+  <!-- Graph -->
+  <div id="graph-area">
+    <div id="graph-top">
+      <span>SIGNAL OUTPUT — last 10 s</span>
+      <div class="leg">
+        <div class="leg-ln" style="background:#4fc3f7"></div><span>duty_L (fwd, GP0)</span>
+      </div>
+      <div class="leg">
+        <div class="leg-ln" style="background:#ff6b6b"></div><span>&#8722;duty_H (rev, GP1)</span>
+      </div>
+      <div class="leg">
+        <div class="leg-ln" style="background:#56d364;opacity:0.7"></div><span>signal</span>
+      </div>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="cv"></canvas>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+'use strict';
+
+// ── Constants ──────────────────────────────────────────────────────
+const FRAME_HEADER = 0xAB;
+const TX_HZ        = 80;
+const SHOW_S       = 10;
+const BUF          = 3200;  // ~40 s at 80 Hz
+
+// ── State ──────────────────────────────────────────────────────────
+let port      = null;
+let writer    = null;
+let rxReader  = null;   // tracked so we can cancel() before port.close()
+let running   = false;
+let txTimer   = null;
+let t0        = 0;
+
+let waveType = 'sine';
+const P = { period: 2.0, mag: 50, offset: 0 };
+
+// RX Hz
+let rxLastTs = NaN, rxHzEma = NaN;
+const RX_A   = 0.15;
+let rxPkts   = 0;
+
+// TX Hz
+let txLastMs = 0, txHzEma = NaN;
+const TX_A   = 0.1;
+
+// Ring buffer
+const rb = {
+  t:   new Float64Array(BUF),
+  sig: new Float32Array(BUF),
+  dL:  new Uint8Array(BUF),
+  dH:  new Uint8Array(BUF),
+  ptr: 0,
+  n:   0,
+};
+
+// ── Serial ─────────────────────────────────────────────────────────
+async function toggleConnect() {
+  if (port) { await doDisconnect(); }
+  else      { await doConnect(); }
+}
+
+async function doConnect() {
+  try {
+    port = await navigator.serial.requestPort();
+    const baud = parseInt(document.getElementById('inp-baud').value) || 2000000;
+    await port.open({ baudRate: baud });
+    writer = port.writable.getWriter();
+    setStatus('connected', 'IDLE');
+    document.getElementById('btn-conn').textContent = 'Disconnect';
+    startRxLoop();
+  } catch (e) {
+    port = null;
+    setStatus('error', 'ERROR: ' + e.message);
+  }
+}
+
+async function doDisconnect() {
+  if (running) toggleRun();
+  try { await sendPacket(0, 0); } catch (_) {}
+  // Must cancel the reader BEFORE port.close(), otherwise Chrome throws InvalidStateError
+  try { if (rxReader) { await rxReader.cancel(); rxReader = null; } } catch (_) {}
+  try { writer.releaseLock(); writer = null; } catch (_) {}
+  try { await port.close(); } catch (_) {}
+  port = null;
+  setStatus('', 'DISCONNECTED');
+  document.getElementById('btn-conn').textContent = 'Connect';
+  rxHzEma = NaN; txHzEma = NaN;
+  document.getElementById('hz-rx').textContent = '-- Hz';
+  document.getElementById('hz-tx').textContent = '-- Hz';
+}
+
+// ── RX loop ─────────────────────────────────────────────────────────
+function startRxLoop() {
+  (async () => {
+    const dec = new TextDecoder();
+    let buf = '';
+    while (port && port.readable) {
+      rxReader = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await rxReader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf('\n')) !== -1) {
+            parseRx(buf.slice(0, nl).trim());
+            buf = buf.slice(nl + 1);
+          }
+        }
+      } catch (_) { /* port closed or cancelled — exit cleanly */ }
+      finally { rxReader.releaseLock(); rxReader = null; }
+    }
+  })();
+}
+
+function parseRx(line) {
+  // Format: "timestamp_ms,duty_L,duty_H,pwm_L,pwm_H"
+  const p = line.split(',');
+  if (p.length < 5) return;   // need all 5 fields
+  const ts = parseFloat(p[0]);
+  if (isNaN(ts)) return;
+
+  if (!isNaN(rxLastTs)) {
+    const dt = ts - rxLastTs;
+    if (dt > 0 && dt < 5000) {
+      const hz = 1000 / dt;
+      rxHzEma = isNaN(rxHzEma) ? hz : RX_A * hz + (1 - RX_A) * rxHzEma;
+      document.getElementById('hz-rx').textContent = rxHzEma.toFixed(1) + ' Hz';
+    }
+  }
+  rxLastTs = ts;
+  rxPkts++;
+  document.getElementById('pkt-ctr').textContent = 'pkts: ' + rxPkts;
+}
+
+// ── TX: binary packet ───────────────────────────────────────────────
+// Packet: [0xAB][duty_L][duty_H][duty_L XOR duty_H]
+// duty_L, duty_H in [0, 100]  (latest-value overwrite on Arduino)
+async function sendPacket(dL, dH) {
+  if (!writer) return;
+  const cL  = Math.max(0, Math.min(100, Math.round(dL)));
+  const cH  = Math.max(0, Math.min(100, Math.round(dH)));
+  const crc = (cL ^ cH) & 0xFF;
+  await writer.write(new Uint8Array([FRAME_HEADER, cL, cH, crc]));
+}
+
+// ── Wave generator ──────────────────────────────────────────────────
+function computeSignal(t) {
+  const T  = P.period;
+  const tt = ((t % T) + T) % T;
+  let wave;
+  switch (waveType) {
+    case 'sine':
+      wave = Math.sin(2 * Math.PI * t / T); break;
+    case 'square':
+      wave = Math.sin(2 * Math.PI * t / T) >= 0 ? 1 : -1; break;
+    case 'ramp':
+      wave = 2 * (tt / T) - 1; break;  // -1 → +1 sawtooth
+    default: wave = 0;
+  }
+  // signal = offset + mag * wave(-1..+1)
+  // Default (offset=0): ±mag, full bipolar
+  // offset>0: shifted into + domain; offset<0: shifted into - domain
+  return P.offset + P.mag * wave;
+}
+
+// ── Run / Stop ──────────────────────────────────────────────────────
+function toggleRun() {
+  if (!port) { setStatus('error', 'NOT CONNECTED'); return; }
+  running = !running;
+  const btn = document.getElementById('btn-run');
+  if (running) {
+    t0 = performance.now() / 1000;
+    btn.innerHTML = '&#9632; STOP';
+    btn.classList.add('running');
+    setStatus('running', 'RUNNING');
+    txTimer = setInterval(tick, 1000 / TX_HZ);
+  } else {
+    clearInterval(txTimer); txTimer = null;
+    btn.innerHTML = '&#9654; START';
+    btn.classList.remove('running');
+    setStatus('connected', 'IDLE');
+    sendPacket(0, 0);
+    document.getElementById('ro-sig').textContent = '0.0';
+    document.getElementById('ro-dl').textContent  = '0';
+    document.getElementById('ro-dh').textContent  = '0';
+  }
+}
+
+function tick() {
+  const now = performance.now() / 1000;
+  const t   = now - t0;
+  const sig = computeSignal(t);
+  const cl  = Math.max(-100, Math.min(100, sig));
+  const dL  = cl >= 0 ?  cl : 0;
+  const dH  = cl <  0 ? -cl : 0;
+
+  sendPacket(dL, dH);
+  pushSample(now, cl, Math.round(dL), Math.round(dH));
+
+  // TX Hz
+  const ms = performance.now();
+  if (txLastMs > 0) {
+    const hz = 1000 / (ms - txLastMs);
+    txHzEma = isNaN(txHzEma) ? hz : TX_A * hz + (1 - TX_A) * txHzEma;
+    document.getElementById('hz-tx').textContent = txHzEma.toFixed(1) + ' Hz';
+  }
+  txLastMs = ms;
+
+  document.getElementById('ro-sig').textContent = cl.toFixed(1);
+  document.getElementById('ro-dl').textContent  = Math.round(dL);
+  document.getElementById('ro-dh').textContent  = Math.round(dH);
+}
+
+// ── Ring buffer ─────────────────────────────────────────────────────
+function pushSample(t, sig, dL, dH) {
+  const i  = rb.ptr % BUF;
+  rb.t[i]  = t; rb.sig[i] = sig; rb.dL[i] = dL; rb.dH[i] = dH;
+  rb.ptr++;
+  rb.n = Math.min(rb.ptr, BUF);
+}
+
+// ── Canvas graph ─────────────────────────────────────────────────────
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+function draw() {
+  requestAnimationFrame(draw);
+  const wrap = document.getElementById('canvas-wrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+
+  // Background
+  ctx.fillStyle = '#0b0c0e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  const Y_MIN = -110, Y_MAX = 110;
+  const PADS  = { l: 56, r: 12, t: 14, b: 36 };
+  const gW    = W - PADS.l - PADS.r;
+  const gH    = H - PADS.t - PADS.b;
+
+  function toX(t, tMin) { return PADS.l + ((t - tMin) / SHOW_S) * gW; }
+  function toY(v)        { return PADS.t + (1 - (v - Y_MIN) / (Y_MAX - Y_MIN)) * gH; }
+
+  const gridVals = [-100, -75, -50, -25, 0, 25, 50, 75, 100];
+  ctx.font = '16px Consolas, monospace';
+  for (const g of gridVals) {
+    const y = toY(g);
+    if (g === 0) {
+      ctx.strokeStyle = '#7a7e8a';
+      ctx.lineWidth   = 1.5;
+    } else if (g % 50 === 0) {
+      ctx.strokeStyle = '#4a4d58';
+      ctx.lineWidth   = 1.0;
+    } else {
+      ctx.strokeStyle = '#2e3038';
+      ctx.lineWidth   = 0.7;
+    }
+    ctx.beginPath(); ctx.moveTo(PADS.l, y); ctx.lineTo(W - PADS.r, y); ctx.stroke();
+    ctx.fillStyle = g === 0 ? '#c8cad2' : '#8a8d98';
+    ctx.fillText(g === 0 ? '0' : (g > 0 ? '+' + g : g), 2, y + 5);
+  }
+
+  // Border
+  ctx.strokeStyle = '#5a5d66'; ctx.lineWidth = 1;
+  ctx.strokeRect(PADS.l, PADS.t, gW, gH);
+
+  if (rb.n < 2) {
+    ctx.fillStyle = '#9da0ab'; ctx.font = '20px Consolas, monospace';
+    ctx.fillText('Waiting for data...', PADS.l + 14, PADS.t + 34);
+    drawTimeAxis(W, H, PADS, gW, gH);
+    return;
+  }
+
+  // Time range
+  const newestI = (rb.ptr - 1 + BUF) % BUF;
+  const tNow    = rb.t[newestI];
+  const tMin    = tNow - SHOW_S;
+
+  // Draw a signal line
+  function drawLine(getV, color, lw, alpha) {
+    ctx.save();
+    ctx.rect(PADS.l, PADS.t, gW, gH);
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k < rb.n; k++) {
+      const idx = (rb.ptr - rb.n + k + BUF) % BUF;
+      const t   = rb.t[idx];
+      if (t < tMin - 0.1) continue;
+      const x = toX(t, tMin), y = toY(getV(idx));
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else          { ctx.lineTo(x, y); }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawLine(i => rb.sig[i],        '#56d364', 1.4, 0.55);  // signal (green, dim)
+  drawLine(i =>  rb.dL[i],        '#4fc3f7', 2.0, 1.00);  // duty_L fwd (cyan, up)
+  drawLine(i => -rb.dH[i],        '#ff6b6b', 2.0, 1.00);  // duty_H rev (red, down)
+
+  drawTimeAxis(W, H, PADS, gW, gH, tMin);
+}
+
+function drawTimeAxis(W, H, P, gW, gH, tMin) {
+  ctx.fillStyle = '#9da0ab';
+  ctx.font = '16px Consolas, monospace';
+  for (let dt = 0; dt <= SHOW_S; dt += 2) {
+    const x   = P.l + (dt / SHOW_S) * gW;
+    const lbl = (-(SHOW_S - dt)).toFixed(0) + 's';
+    ctx.fillText(lbl, x - 12, H - P.b + 24);
+    ctx.strokeStyle = '#5a5d66'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, P.t + gH); ctx.lineTo(x, P.t + gH + 5); ctx.stroke();
+    // Vertical grid lines
+    ctx.strokeStyle = '#23252b'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(x, P.t); ctx.lineTo(x, P.t + gH); ctx.stroke();
+  }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────
+function setStatus(cls, txt) {
+  document.getElementById('status-dot').className = cls;
+  document.getElementById('status-txt').textContent = txt;
+}
+
+function setWave(w) {
+  waveType = w;
+  ['sine','square','ramp'].forEach(n =>
+    document.getElementById('btn-' + n).classList.toggle('active', n === w));
+  document.getElementById('ro-wave').textContent = w;
+}
+
+function onParam(name, raw) {
+  const v = parseFloat(raw);
+  P[name] = v;
+  const el = document.getElementById('v-' + name);
+  if (name === 'period') {
+    el.textContent = v < 1 ? v.toFixed(3) : v.toFixed(2);
+    document.getElementById('ro-period').textContent = (v < 1 ? v.toFixed(3) : v.toFixed(2)) + ' s';
+  } else {
+    el.textContent = Math.round(v).toString();
+  }
+  // Update range readout: [offset-mag .. offset+mag]
+  const lo = Math.round(P.offset - P.mag);
+  const hi = Math.round(P.offset + P.mag);
+  document.getElementById('ro-range').textContent =
+    (lo >= 0 ? '+' : '') + lo + ' ~ ' + (hi >= 0 ? '+' : '') + hi;
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+if (!('serial' in navigator)) {
+  setStatus('error', 'Web Serial not supported — use Chrome or Edge');
+}
+draw();
+</script>
+</body>
+</html>
