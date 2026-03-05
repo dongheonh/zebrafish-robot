@@ -300,12 +300,11 @@ const SHOW_S       = 10;
 const BUF          = 3200;  // ~40 s at 80 Hz
 
 // ── State ──────────────────────────────────────────────────────────
-let port      = null;
-let writer    = null;
-let rxReader  = null;   // tracked so we can cancel() before port.close()
-let running   = false;
-let txTimer   = null;
-let t0        = 0;
+let port    = null;
+let writer  = null;
+let running = false;
+let txTimer = null;
+let t0      = 0;
 
 let waveType = 'sine';
 const P = { period: 2.0, mag: 50, offset: 0 };
@@ -353,8 +352,6 @@ async function doConnect() {
 async function doDisconnect() {
   if (running) toggleRun();
   try { await sendPacket(0, 0); } catch (_) {}
-  // Must cancel the reader BEFORE port.close(), otherwise Chrome throws InvalidStateError
-  try { if (rxReader) { await rxReader.cancel(); rxReader = null; } } catch (_) {}
   try { writer.releaseLock(); writer = null; } catch (_) {}
   try { await port.close(); } catch (_) {}
   port = null;
@@ -371,10 +368,10 @@ function startRxLoop() {
     const dec = new TextDecoder();
     let buf = '';
     while (port && port.readable) {
-      rxReader = port.readable.getReader();
+      const reader = port.readable.getReader();
       try {
         while (true) {
-          const { value, done } = await rxReader.read();
+          const { value, done } = await reader.read();
           if (done) break;
           buf += dec.decode(value, { stream: true });
           let nl;
@@ -383,8 +380,8 @@ function startRxLoop() {
             buf = buf.slice(nl + 1);
           }
         }
-      } catch (_) { /* port closed or cancelled — exit cleanly */ }
-      finally { rxReader.releaseLock(); rxReader = null; }
+      } catch (_) { break; }
+      finally { reader.releaseLock(); }
     }
   })();
 }
@@ -392,7 +389,7 @@ function startRxLoop() {
 function parseRx(line) {
   // Format: "timestamp_ms,duty_L,duty_H,pwm_L,pwm_H"
   const p = line.split(',');
-  if (p.length < 5) return;   // need all 5 fields
+  if (p.length < 1) return;
   const ts = parseFloat(p[0]);
   if (isNaN(ts)) return;
 
@@ -557,6 +554,7 @@ function draw() {
   // Draw a signal line
   function drawLine(getV, color, lw, alpha) {
     ctx.save();
+    ctx.beginPath();                        // clear stale path before clipping
     ctx.rect(PADS.l, PADS.t, gW, gH);
     ctx.clip();
     ctx.strokeStyle = color;
