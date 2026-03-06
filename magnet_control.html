@@ -233,10 +233,10 @@ input[type=range]::-webkit-slider-thumb {
       <div class="sec-hd">Parameters</div>
 
       <div class="p-row">
-        <span class="p-lbl">Period (s)</span>
-        <input type="range" id="sl-period" min="0.02" max="10" step="0.01" value="2.0"
-               oninput="onParam('period', this.value)">
-        <span class="p-val" id="v-period">2.00</span>
+        <span class="p-lbl">Freq (Hz)</span>
+        <input type="range" id="sl-freq" min="0.1" max="50" step="0.1" value="0.5"
+               oninput="onParam('freq', this.value)">
+        <span class="p-val" id="v-freq">0.5</span>
       </div>
 
       <div class="p-row">
@@ -263,7 +263,7 @@ input[type=range]::-webkit-slider-thumb {
         <span class="ro-k">duty_L</span>   <span class="ro-v" id="ro-dl">0</span>
         <span class="ro-k">duty_H</span>   <span class="ro-v" id="ro-dh">0</span>
         <span class="ro-k">wave</span>     <span class="ro-v" id="ro-wave">sine</span>
-        <span class="ro-k">period</span>   <span class="ro-v" id="ro-period">2.00 s</span>
+        <span class="ro-k">freq</span>     <span class="ro-v" id="ro-freq">0.5 Hz</span>
       </div>
     </div>
 
@@ -611,13 +611,14 @@ function setWave(w) {
 
 function onParam(name, raw) {
   const v = parseFloat(raw);
-  P[name] = v;
-  const el = document.getElementById('v-' + name);
-  if (name === 'period') {
-    el.textContent = v < 1 ? v.toFixed(3) : v.toFixed(2);
-    document.getElementById('ro-period').textContent = (v < 1 ? v.toFixed(3) : v.toFixed(2)) + ' s';
+  if (name === 'freq') {
+    P.period = 1 / v;
+    const disp = v % 1 === 0 ? v.toFixed(1) : (v < 10 ? v.toFixed(1) : v.toFixed(0));
+    document.getElementById('v-freq').textContent  = disp;
+    document.getElementById('ro-freq').textContent = disp + ' Hz';
   } else {
-    el.textContent = Math.round(v).toString();
+    P[name] = v;
+    document.getElementById('v-' + name).textContent = Math.round(v).toString();
   }
   // Update range readout: [offset-mag .. offset+mag]
   const lo = Math.round(P.offset - P.mag);
